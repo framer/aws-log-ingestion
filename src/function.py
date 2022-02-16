@@ -211,23 +211,12 @@ async def _send_log_entry(log_entry, context):
     """
     entry_type = _get_entry_type(log_entry)
 
-    log_stream_name = context.log_stream_name
-
     context = {
         "function_name": context.function_name,
         "invoked_function_arn": context.invoked_function_arn,
         "log_group_name": context.log_group_name,
         "log_stream_name": context.log_stream_name,
     }
-
-    # Framer Specific
-    if log_stream_name.startswith("Framer"):
-        service_name = log_stream_name.split("/")[0]
-        tags = _parse_newrelic_tags()
-        if "account" in tags:
-            service_name = tags["account"].capitalize() + " - " + service_name
-        context["service_name"] = service_name
-    # End Framer Specific
 
     session_timeout = _calculate_session_timeout()
 
@@ -512,6 +501,7 @@ def _package_log_payload(data):
     log_events = entry["logEvents"]
     log_messages = []
     lambda_request_id = None
+    tags = _parse_newrelic_tags()
 
     for log_event in log_events:
         log_message = {
@@ -533,6 +523,14 @@ def _package_log_payload(data):
                     "lambda_request_id"
                 ] = lambda_request_id
 
+        # Start Framer Specific
+        if entry["logStream"].startswith("Framer"):
+            service_name = entry["logStream"].split("/")[0]
+            if "account" in tags:
+                service_name = tags["account"].capitalize() + " - " + service_name
+            log_message["attributes"]["service_name"] = service_name
+        # End Framer Specific
+
         log_messages.append(log_message)
 
     packaged_payload = [
@@ -544,10 +542,10 @@ def _package_log_payload(data):
                         "logStream": entry["logStream"],
                         "logGroup": entry["logGroup"],
                     },
-                }
+                },
             },
             "logs": log_messages,
-        }
+        },
     ]
 
     _get_newrelic_tags(packaged_payload)
